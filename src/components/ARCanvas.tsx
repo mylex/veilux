@@ -1,13 +1,14 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 
 // Import Keypoint type if available
 import type { Keypoint, PoseDetector } from '@tensorflow-models/pose-detection';
 
 interface ARCanvasProps {
   overlayImage: string; // Path to overlay PNG (e.g., dress, tunic)
+  overlayType: 'hijab' | 'dress' | 'tunic'; // Type of garment for proper positioning
 }
 
-const ARCanvas: React.FC<ARCanvasProps> = ({ overlayImage }) => {
+const ARCanvas: React.FC<ARCanvasProps> = ({ overlayImage, overlayType }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [usingCamera, setUsingCamera] = useState(false);
@@ -67,6 +68,44 @@ const ARCanvas: React.FC<ARCanvasProps> = ({ overlayImage }) => {
     return keypoints.find((k) => k.name === name);
   };
 
+  // Helper to draw overlay based on garment type and keypoints
+  const drawOverlay = useCallback(
+    (ctx: CanvasRenderingContext2D, keypoints: Keypoint[], overlay: HTMLImageElement) => {
+      const leftShoulder = findKeypoint(keypoints, 'left_shoulder');
+      const rightShoulder = findKeypoint(keypoints, 'right_shoulder');
+      const leftHip = findKeypoint(keypoints, 'left_hip');
+      const rightHip = findKeypoint(keypoints, 'right_hip');
+      const nose = findKeypoint(keypoints, 'nose');
+      const leftEye = findKeypoint(keypoints, 'left_eye');
+      const rightEye = findKeypoint(keypoints, 'right_eye');
+      const leftEar = findKeypoint(keypoints, 'left_ear');
+      const rightEar = findKeypoint(keypoints, 'right_ear');
+
+      if (overlayType === 'hijab' && nose && leftEye && rightEye && leftEar && rightEar &&
+          nose.score && nose.score > 0.3 && leftEye.score && leftEye.score > 0.3 && rightEye.score && rightEye.score > 0.3) {
+        // Calculate head dimensions and position
+        const headWidth = Math.abs(leftEar.x - rightEar.x) * 2.5;
+        const headHeight = headWidth * 1.3; // Maintain aspect ratio
+        const x = nose.x - headWidth / 2;
+        const y = nose.y - headHeight * 0.6; // Position slightly above nose
+        ctx.drawImage(overlay, x, y, headWidth, headHeight);
+      } else if ((overlayType === 'dress' || overlayType === 'tunic') && 
+                 leftShoulder && rightShoulder && leftHip && rightHip &&
+                 leftShoulder.score && leftShoulder.score > 0.3 &&
+                 rightShoulder.score && rightShoulder.score > 0.3 &&
+                 leftHip.score && leftHip.score > 0.3 &&
+                 rightHip.score && rightHip.score > 0.3) {
+        // Calculate body dimensions and position
+        const x = Math.min(leftShoulder.x, rightShoulder.x, leftHip.x, rightHip.x);
+        const y = Math.min(leftShoulder.y, rightShoulder.y);
+        const width = Math.abs(rightShoulder.x - leftShoulder.x) * 1.8;
+        const height = Math.abs(leftHip.y - rightShoulder.y) * 2;
+        ctx.drawImage(overlay, x - width * 0.4, y - height * 0.1, width * 1.8, height * 1.8);
+      }
+    },
+    [overlayType]
+  );
+
   // Run pose detection and draw overlay
   useEffect(() => {
     let animationId: number;
@@ -77,35 +116,17 @@ const ARCanvas: React.FC<ARCanvasProps> = ({ overlayImage }) => {
       if (!video || !canvas) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const poses = await detector.estimatePoses(video);
-      if (poses && poses[0]) {
-        const keypoints = poses[0].keypoints as Keypoint[];
-        // Draw overlay image based on keypoints (simple example: align to shoulders)
-        const leftShoulder = findKeypoint(keypoints, 'left_shoulder');
-        const rightShoulder = findKeypoint(keypoints, 'right_shoulder');
-        const leftHip = findKeypoint(keypoints, 'left_hip');
-        const rightHip = findKeypoint(keypoints, 'right_hip');
-        if (
-          leftShoulder && rightShoulder && leftHip && rightHip &&
-          leftShoulder.score && leftShoulder.score > 0.3 &&
-          rightShoulder.score && rightShoulder.score > 0.3 &&
-          leftHip.score && leftHip.score > 0.3 &&
-          rightHip.score && rightHip.score > 0.3
-        ) {
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const poses = await detector.estimatePoses(video);
+        if (poses && poses[0]) {
+          const keypoints = poses[0].keypoints as Keypoint[];
           const overlay = new window.Image();
           overlay.src = overlayImage;
-          overlay.onload = () => {
-            // Calculate bounding box for overlay
-            const x = Math.min(leftShoulder.x, rightShoulder.x, leftHip.x, rightHip.x);
-            const y = Math.min(leftShoulder.y, rightShoulder.y);
-            const width = Math.abs(rightShoulder.x - leftShoulder.x) * 1.5;
-            const height = Math.abs(leftHip.y - rightShoulder.y) * 1.5;
-            ctx.drawImage(overlay, x - width * 0.25, y, width, height);
-          };
+          overlay.onload = () => drawOverlay(ctx, keypoints, overlay);
         }
       }
       animationId = requestAnimationFrame(runDetection);
@@ -118,7 +139,7 @@ const ARCanvas: React.FC<ARCanvasProps> = ({ overlayImage }) => {
     return () => {
       cancelAnimationFrame(animationId);
     };
-  }, [usingCamera, detector, overlayImage]);
+  }, [usingCamera, detector, overlayImage, overlayType, drawOverlay]);
 
   // For static image: run detection once
   useEffect(() => {
@@ -138,33 +159,15 @@ const ARCanvas: React.FC<ARCanvasProps> = ({ overlayImage }) => {
       const poses = await detector.estimatePoses(img);
       if (poses && poses[0]) {
         const keypoints = poses[0].keypoints as Keypoint[];
-        const leftShoulder = findKeypoint(keypoints, 'left_shoulder');
-        const rightShoulder = findKeypoint(keypoints, 'right_shoulder');
-        const leftHip = findKeypoint(keypoints, 'left_hip');
-        const rightHip = findKeypoint(keypoints, 'right_hip');
-        if (
-          leftShoulder && rightShoulder && leftHip && rightHip &&
-          leftShoulder.score && leftShoulder.score > 0.3 &&
-          rightShoulder.score && rightShoulder.score > 0.3 &&
-          leftHip.score && leftHip.score > 0.3 &&
-          rightHip.score && rightHip.score > 0.3
-        ) {
-          const overlay = new window.Image();
-          overlay.src = overlayImage;
-          overlay.onload = () => {
-            const x = Math.min(leftShoulder.x, rightShoulder.x, leftHip.x, rightHip.x);
-            const y = Math.min(leftShoulder.y, rightShoulder.y);
-            const width = Math.abs(rightShoulder.x - leftShoulder.x) * 1.5;
-            const height = Math.abs(leftHip.y - rightShoulder.y) * 1.5;
-            ctx.drawImage(overlay, x - width * 0.25, y, width, height);
-          };
-        }
+        const overlay = new window.Image();
+        overlay.src = overlayImage;
+        overlay.onload = () => drawOverlay(ctx, keypoints, overlay);
       }
     };
     if (imageSrc && detector) {
       runDetection();
     }
-  }, [imageSrc, detector, overlayImage]);
+  }, [imageSrc, detector, overlayImage, overlayType, drawOverlay]);
 
   return (
     <div className="flex flex-col items-center gap-4">
