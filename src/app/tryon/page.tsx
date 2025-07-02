@@ -39,7 +39,7 @@ export default function TryOnPage() {
         {usingCamera ? (
           <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
         ) : imageSrc ? (
-          <img src={imageSrc} alt="Uploaded" className="w-full h-full object-cover" />
+          <Image src={imageSrc} alt="Uploaded" className="w-full h-full object-cover" />
         ) : (
           <span className="text-gray-400">Camera or photo preview</span>
         )}
