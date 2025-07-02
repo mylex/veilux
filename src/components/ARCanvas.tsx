@@ -4,6 +4,14 @@ import { useRouter } from 'next/navigation';
 // Import Keypoint type if available
 import type { Keypoint, PoseDetector } from '@tensorflow-models/pose-detection';
 
+// TODO: Add a loading state for the detector
+// TODO: Dress should be fit automatically, and the value should be set automatically
+// TODO: Add a button to reset the canvas
+// TODO: Add a button to toggle the camera
+// TODO: Add a button to toggle the overlay
+// TODO: Add a button to toggle the detector
+// TODO: Add a button to toggle the overlay
+// TODO: Add a button to toggle the overlay
 interface ARCanvasProps {
   overlayImage: string; // Path to overlay PNG (e.g., dress, tunic)
   overlayType: 'hijab' | 'dress' | 'tunic'; // Type of garment for proper positioning
@@ -91,13 +99,25 @@ const ARCanvas: React.FC<ARCanvasProps> = ({ overlayImage, overlayType }) => {
       const leftEar = findKeypoint(keypoints, 'left_ear');
       const rightEar = findKeypoint(keypoints, 'right_ear');
 
-      if (overlayType === 'hijab' && nose && leftEye && rightEye && leftEar && rightEar &&
-          nose.score && nose.score > 0.3 && leftEye.score && leftEye.score > 0.3 && rightEye.score && rightEye.score > 0.3) {
-        // Calculate head dimensions and position
-        const headWidth = Math.abs(leftEar.x - rightEar.x) * 2.5;
-        const headHeight = headWidth * 1.3; // Maintain aspect ratio
-        const x = nose.x - headWidth / 2;
-        const y = nose.y - headHeight * 0.6; // Position slightly above nose
+      if (
+        overlayType === 'hijab' &&
+        nose && leftEye && rightEye && leftEar && rightEar &&
+        nose.score && nose.score > 0.3 &&
+        leftEye.score && leftEye.score > 0.3 &&
+        rightEye.score && rightEye.score > 0.3 &&
+        leftEar.score && leftEar.score > 0.3 &&
+        rightEar.score && rightEar.score > 0.3
+      ) {
+        // Calculate center between eyes
+        const eyeCenterX = (leftEye.x + rightEye.x) / 2;
+        const eyeCenterY = (leftEye.y + rightEye.y) / 2;
+        // Use distance between ears for width
+        const headWidth = Math.abs(leftEar.x - rightEar.x) * 3.1; // Try 2.1 for better fit
+        // Use distance from eyes to chin (if available) or nose for height
+        const headHeight = headWidth * 1.15; // Slightly taller for hijab
+        // Position: center horizontally, a bit above the eyes
+        const x = eyeCenterX - headWidth / 2;
+        const y = eyeCenterY - headHeight * 0.25; // Move up a bit
         ctx.drawImage(overlay, x, y, headWidth, headHeight);
       } else if ((overlayType === 'dress' || overlayType === 'tunic') && 
                  leftShoulder && rightShoulder && leftHip && rightHip &&
@@ -110,7 +130,7 @@ const ARCanvas: React.FC<ARCanvasProps> = ({ overlayImage, overlayType }) => {
         const y = Math.min(leftShoulder.y, rightShoulder.y);
         const width = Math.abs(rightShoulder.x - leftShoulder.x) * 1.8;
         const height = Math.abs(leftHip.y - rightShoulder.y) * 2;
-        ctx.drawImage(overlay, x - width * 0.4, y - height * 0.1, width * 1.8, height * 1.8);
+        ctx.drawImage(overlay, x - width * 0.6, y - height * 0.15, width * 1.8, height * 1.6);
       }
     },
     [overlayType]
