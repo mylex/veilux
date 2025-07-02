@@ -12,6 +12,7 @@ import type { Keypoint, PoseDetector } from '@tensorflow-models/pose-detection';
 // TODO: Add a button to toggle the detector
 // TODO: Add a button to toggle the overlay
 // TODO: Add a button to toggle the overlay
+// TODO: Could save the image to the user's device
 interface ARCanvasProps {
   overlayImage: string; // Path to overlay PNG (e.g., dress, tunic)
   overlayType: 'hijab' | 'dress' | 'tunic'; // Type of garment for proper positioning
