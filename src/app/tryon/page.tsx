@@ -8,7 +8,7 @@ const ARCanvas = dynamic(() => import('../../components/ARCanvas'), { ssr: false
 
 export default function TryOnPage() {
   const searchParams = useSearchParams();
-  const image = searchParams?.get('image') || '/tunic-sample.png';
+  const image = searchParams?.get('image') || '';
   const type = (searchParams?.get('type') as 'tunic' | 'hijab' | 'dress') || 'tunic';
 
   return (

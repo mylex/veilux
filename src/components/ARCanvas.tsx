@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 
 // Import Keypoint type if available
 import type { Keypoint, PoseDetector } from '@tensorflow-models/pose-detection';
@@ -15,6 +16,15 @@ const ARCanvas: React.FC<ARCanvasProps> = ({ overlayImage, overlayType }) => {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [detector, setDetector] = useState<PoseDetector | null>(null);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  // Alert and redirect if no overlayImage
+  useEffect(() => {
+    if (!overlayImage || overlayImage.trim() === '') {
+      window.alert('Please come from the product catalog page and try on a specific product.');
+      router.push('/catalog');
+    }
+  }, [overlayImage, router]);
 
   // Initialize TensorFlow.js backend and pose detector
   useEffect(() => {
@@ -126,15 +136,19 @@ const ARCanvas: React.FC<ARCanvasProps> = ({ overlayImage, overlayType }) => {
           const keypoints = poses[0].keypoints as Keypoint[];
           const overlay = new window.Image();
           overlay.src = overlayImage;
-          overlay.onload = () => drawOverlay(ctx, keypoints, overlay);
+          // Draw overlay as soon as image is loaded, and also if already loaded
+          if (overlay.complete) {
+            drawOverlay(ctx, keypoints, overlay);
+          } else {
+            overlay.onload = () => drawOverlay(ctx, keypoints, overlay);
+          }
         }
       }
       animationId = requestAnimationFrame(runDetection);
     };
     if (usingCamera && detector && videoRef.current) {
-      videoRef.current.onloadeddata = () => {
-        runDetection();
-      };
+      // Always run detection loop, not just after button click
+      runDetection();
     }
     return () => {
       cancelAnimationFrame(animationId);
